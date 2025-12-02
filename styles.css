@@ -232,6 +232,80 @@ button:disabled {
     margin: 0;
 }
 
+/* CORS troubleshooting section */
+.cors-info {
+    margin: 20px 0;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cors-info details {
+    padding: 0;
+}
+
+.cors-info summary {
+    padding: 15px 20px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #ffc107;
+    background: rgba(255, 193, 7, 0.1);
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+}
+
+.cors-info summary:hover {
+    background: rgba(255, 193, 7, 0.2);
+}
+
+.cors-content {
+    padding: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cors-content h4 {
+    color: #ffc107;
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+}
+
+.cors-content ol {
+    margin-left: 20px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.cors-content li {
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+.cors-content ul {
+    margin: 8px 0 8px 20px;
+}
+
+.cors-content ul li {
+    margin-bottom: 5px;
+}
+
+.cors-content code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: #ffc107;
+    word-break: break-all;
+}
+
+.cors-content em {
+    color: rgba(255, 255, 255, 0.7);
+    font-style: italic;
+    display: block;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 /* Footer */
 footer {
     text-align: center;

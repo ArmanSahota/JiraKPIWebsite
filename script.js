@@ -62,44 +62,121 @@ class JiraKPIGenerator {
         
         const auth = btoa(`${config.jiraEmail}:${config.jiraApiToken}`);
         
-        while (true) {
-            const url = `${config.jiraBaseUrl}/rest/agile/1.0/sprint/${config.sprintId}/issue`;
-            const params = new URLSearchParams({
-                startAt: startAt.toString(),
-                maxResults: maxResults.toString()
-            });
-            
-            const response = await fetch(`${url}?${params}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Basic ${auth}`,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
+        // CORS proxy options - try multiple strategies
+        const corsProxies = [
+            '', // Direct request first
+            'https://your-proxy-domain.vercel.app/api/jira', // Your deployed proxy
+            'https://api.allorigins.win/raw?url=',
+            'https://cors-anywhere.herokuapp.com/',
+            'https://api.codetabs.com/v1/proxy?quest='
+        ];
+        
+        let lastError = null;
+        
+        for (const proxy of corsProxies) {
+            try {
+                while (true) {
+                    const baseUrl = `${config.jiraBaseUrl}/rest/agile/1.0/sprint/${config.sprintId}/issue`;
+                    const params = new URLSearchParams({
+                        startAt: startAt.toString(),
+                        maxResults: maxResults.toString()
+                    });
+                    
+                    const targetUrl = `${baseUrl}?${params}`;
+                    const requestUrl = proxy ? `${proxy}${encodeURIComponent(targetUrl)}` : targetUrl;
+                    
+                    const headers = {
+                        'Accept': 'application/json'
+                    };
+                    
+                    // Only add auth headers for direct requests or specific proxies
+                    if (!proxy || proxy.includes('cors-anywhere')) {
+                        headers['Authorization'] = `Basic ${auth}`;
+                        headers['Content-Type'] = 'application/json';
+                    }
+                    
+                    const response = await fetch(requestUrl, {
+                        method: 'GET',
+                        headers: headers,
+                        mode: proxy ? 'cors' : 'cors'
+                    });
+                    
+                    if (!response.ok) {
+                        if (response.status === 401) {
+                            throw new Error('Authentication failed. Please check your email and API token.');
+                        } else if (response.status === 404) {
+                            throw new Error(`Sprint ${config.sprintId} not found. Please check the sprint ID.`);
+                        } else if (response.status === 429) {
+                            throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+                        } else {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Handle different proxy response formats
+                    let issuesData;
+                    if (proxy.includes('allorigins') && data.contents) {
+                        issuesData = JSON.parse(data.contents);
+                    } else {
+                        issuesData = data;
+                    }
+                    
+                    issues.push(...(issuesData.issues || []));
+                    
+                    const total = issuesData.total || 0;
+                    startAt += maxResults;
+                    
+                    if (startAt >= total) {
+                        break;
+                    }
                 }
-            });
-            
-            if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error('Authentication failed. Please check your email and API token.');
-                } else if (response.status === 404) {
-                    throw new Error(`Sprint ${config.sprintId} not found. Please check the sprint ID.`);
-                } else {
-                    throw new Error(`Failed to fetch sprint data: ${response.status} ${response.statusText}`);
+                
+                // If we get here, the request was successful
+                return issues;
+                
+            } catch (error) {
+                lastError = error;
+                
+                // Reset for next proxy attempt
+                issues.length = 0;
+                startAt = 0;
+                
+                // If this is a CORS error and we haven't tried all proxies, continue
+                if (error.message.includes('CORS') || error.message.includes('fetch')) {
+                    continue;
                 }
-            }
-            
-            const data = await response.json();
-            issues.push(...(data.issues || []));
-            
-            const total = data.total || 0;
-            startAt += maxResults;
-            
-            if (startAt >= total) {
+                
+                // For other errors, don't try more proxies
                 break;
             }
         }
         
-        return issues;
+        // If all proxies failed, throw a comprehensive error
+        throw new Error(this.generateCORSErrorMessage(lastError));
+    }
+    
+    generateCORSErrorMessage(originalError) {
+        return `
+🚫 Unable to connect to Jira API. This is likely due to CORS (Cross-Origin Resource Sharing) restrictions.
+
+Original error: ${originalError?.message || 'Network request failed'}
+
+🔧 SOLUTIONS TO TRY:
+
+1. 📡 CORPORATE NETWORK: Try accessing this tool from your company's network or VPN
+2. 🌐 BROWSER EXTENSION: Install a CORS extension:
+   • Chrome: "CORS Unblock" or "Disable CORS"
+   • Firefox: "CORS Everywhere"
+   • Edge: "CORS Unblock"
+3. 🔒 BROWSER SETTINGS: Launch Chrome with disabled security (for testing only):
+   chrome.exe --user-data-dir="C:/Chrome dev session" --disable-web-security
+4. 💼 IT SUPPORT: Contact your IT team about CORS policies for ${window.location.origin}
+5. 🖥️ DESKTOP VERSION: Consider using the Python version of this tool locally
+
+⚠️ Note: CORS is a browser security feature. The issue is not with your credentials or this application.
+        `.trim();
     }
     
     computeMetrics(issues, storyPointsField) {

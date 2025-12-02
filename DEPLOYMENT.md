@@ -79,10 +79,17 @@ Help users find their sprint ID:
 - ✅ Credentials never leave the user's browser
 
 ### CORS Considerations
-Modern browsers may block cross-origin requests to Jira. Users might need to:
-1. Use a CORS browser extension (for testing)
-2. Or use their organization's VPN/network
-3. Or ask their IT team about CORS policies
+Modern browsers may block cross-origin requests to Jira. This is the most common issue users face.
+
+**🔧 COMPREHENSIVE SOLUTION:** See [`CORS-SOLUTION.md`](CORS-SOLUTION.md) for detailed troubleshooting guide.
+
+**Quick fixes:**
+1. **Deploy the included CORS proxy** (recommended - see CORS-SOLUTION.md)
+2. **Use corporate VPN/network** (often works directly)
+3. **Install CORS browser extension** (for testing only)
+4. **Contact IT team** about CORS policies for your domain
+
+The application includes multiple fallback strategies and will try different approaches automatically.
 
 ## 📊 Features Overview
 
