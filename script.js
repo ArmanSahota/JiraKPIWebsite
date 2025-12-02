@@ -324,7 +324,9 @@ Original error: ${originalError?.message || 'Network request failed'}
                     bugCount: 0,
                     storyCount: 0,
                     cycleTimes: [],
-                    storyPointsList: []
+                    storyPointsList: [],
+                    approvedPRs: 0,
+                    prList: []
                 };
             }
             
@@ -339,6 +341,13 @@ Original error: ${originalError?.message || 'Network request failed'}
                 m.bugCount += 1;
             } else if (issueType.toLowerCase() === 'story') {
                 m.storyCount += 1;
+            }
+            
+            // Track PRs from issue links or custom fields
+            const prInfo = this.extractPRInfo(issue);
+            if (prInfo) {
+                m.approvedPRs += prInfo.count;
+                m.prList.push(...prInfo.prs);
             }
             
             if (DONE_STATUS_CATEGORIES.has(statusCategory)) {
@@ -399,6 +408,73 @@ Original error: ${originalError?.message || 'Network request failed'}
         }
     }
     
+    extractPRInfo(issue) {
+        try {
+            const prs = [];
+            let approvedCount = 0;
+            
+            // Check for PR links in issue links
+            const issueLinks = issue.fields?.issuelinks || [];
+            issueLinks.forEach(link => {
+                const linkedIssue = link.inwardIssue || link.outwardIssue;
+                if (linkedIssue) {
+                    const summary = linkedIssue.fields?.summary || '';
+                    // Look for PR references in summary (e.g., "PR #123", "Pull Request #456")
+                    const prMatch = summary.match(/PR\s*#?(\d+)|Pull Request\s*#?(\d+)/i);
+                    if (prMatch) {
+                        const prNumber = prMatch[1] || prMatch[2];
+                        prs.push({
+                            number: prNumber,
+                            title: summary,
+                            status: 'linked'
+                        });
+                        approvedCount++;
+                    }
+                }
+            });
+            
+            // Check for PR URLs in description or comments
+            const description = issue.fields?.description || '';
+            const prUrlMatches = description.match(/github\.com\/[^\/]+\/[^\/]+\/pull\/(\d+)/gi) || [];
+            prUrlMatches.forEach(url => {
+                const prNumber = url.match(/\/pull\/(\d+)/)[1];
+                if (!prs.find(pr => pr.number === prNumber)) {
+                    prs.push({
+                        number: prNumber,
+                        url: url,
+                        status: 'mentioned'
+                    });
+                    approvedCount++;
+                }
+            });
+            
+            // Check for custom PR field (if your Jira has one)
+            // Common custom field names: customfield_xxxxx
+            const customFields = Object.keys(issue.fields || {});
+            customFields.forEach(fieldKey => {
+                if (fieldKey.startsWith('customfield_')) {
+                    const fieldValue = issue.fields[fieldKey];
+                    if (typeof fieldValue === 'string' && fieldValue.includes('github.com')) {
+                        const prMatch = fieldValue.match(/\/pull\/(\d+)/);
+                        if (prMatch && !prs.find(pr => pr.number === prMatch[1])) {
+                            prs.push({
+                                number: prMatch[1],
+                                url: fieldValue,
+                                status: 'custom_field'
+                            });
+                            approvedCount++;
+                        }
+                    }
+                }
+            });
+            
+            return prs.length > 0 ? { count: approvedCount, prs } : null;
+        } catch (error) {
+            console.warn('Error extracting PR info:', error);
+            return null;
+        }
+    }
+    
     computeSprintTotals(metrics) {
         const totals = {
             totalIssues: 0,
@@ -407,6 +483,7 @@ Original error: ${originalError?.message || 'Network request failed'}
             completedStoryPoints: 0,
             totalBugs: 0,
             totalStories: 0,
+            totalPRs: 0,
             allCycleTimes: [],
             allStoryPoints: [],
             assigneeStoryPoints: []
@@ -421,6 +498,7 @@ Original error: ${originalError?.message || 'Network request failed'}
             totals.completedStoryPoints += m.completedStoryPoints;
             totals.totalBugs += m.bugCount;
             totals.totalStories += m.storyCount;
+            totals.totalPRs += (m.approvedPRs || 0);
             totals.allCycleTimes.push(...m.cycleTimes);
             totals.allStoryPoints.push(...m.storyPointsList);
             
@@ -451,6 +529,7 @@ Original error: ${originalError?.message || 'Network request failed'}
             'Total Story Points',
             'Completed Story Points',
             'Completion % (Story Points)',
+            'Approved PRs',
             'Avg Story Points per Issue',
             'Avg Cycle Time (Days)',
             'Bug Ratio (%)',
@@ -480,6 +559,7 @@ Original error: ${originalError?.message || 'Network request failed'}
                     m.totalStoryPoints,
                     m.completedStoryPoints,
                     m.totalStoryPoints > 0 ? Math.round((m.completedStoryPoints / m.totalStoryPoints) * 1000) / 10 : 0,
+                    m.approvedPRs || 0,
                     avgSpPerIssue,
                     avgCycleTime,
                     bugRatio,
@@ -585,6 +665,10 @@ Original error: ${originalError?.message || 'Network request failed'}
                 <span class="summary-label">🐛 Total Bugs</span>
                 <span class="summary-value">${totals.totalBugs}</span>
             </div>
+            <div class="summary-item">
+                <span class="summary-label">🔀 Approved PRs</span>
+                <span class="summary-value">${totals.totalPRs}</span>
+            </div>
         `;
     }
     
@@ -595,7 +679,7 @@ Original error: ${originalError?.message || 'Network request failed'}
         let html = '<table class="preview-table"><thead><tr>';
         html += '<th>Assignee</th><th>Total Issues</th><th>Completed</th><th>Completion %</th>';
         html += '<th>Story Points</th><th>SP Completed</th><th>SP Completion %</th>';
-        html += '<th>Avg Cycle Time</th></tr></thead><tbody>';
+        html += '<th>Approved PRs</th><th>Avg Cycle Time</th></tr></thead><tbody>';
         
         sortedMetrics.forEach(([assignee, m]) => {
             const completionRate = m.totalIssues > 0 ? 
@@ -613,6 +697,7 @@ Original error: ${originalError?.message || 'Network request failed'}
                 <td>${m.totalStoryPoints}</td>
                 <td>${m.completedStoryPoints}</td>
                 <td>${spCompletionRate}%</td>
+                <td>${m.approvedPRs || 0}</td>
                 <td>${avgCycleTime}d</td>
             </tr>`;
         });
