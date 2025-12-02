@@ -90,7 +90,7 @@ class JiraKPIGenerator {
         // CORS proxy options - try multiple strategies
         const corsProxies = [
             '', // Direct request first
-            'https://jira-kpi-website-dev.vercel.app/api/jira', // Your deployed proxy
+            'https://jira-kpi-website-prod-git-main-asahotas-projects.vercel.app/api/jira', // Your deployed proxy
             'https://api.allorigins.win/raw?url=',
             'https://cors-anywhere.herokuapp.com/',
             'https://api.codetabs.com/v1/proxy?quest='
@@ -113,7 +113,7 @@ class JiraKPIGenerator {
                         'Accept': 'application/json'
                     };
                     
-                    if (proxy === 'https://jira-kpi-website-dev.vercel.app/api/jira') {
+                    if (proxy === 'https://jira-kpi-website-prod-git-main-asahotas-projects.vercel.app/api/jira') {
                         // Our custom proxy - send the path and domain separately
                         const jiraDomain = config.jiraBaseUrl.replace('https://', '').replace('http://', '');
                         requestUrl = `${proxy}${baseUrl.replace(config.jiraBaseUrl, '')}?${params}`;
@@ -232,7 +232,7 @@ class JiraKPIGenerator {
                     'Accept': 'application/json'
                 };
                 
-                if (proxy === 'https://jira-kpi-website-dev.vercel.app/api/jira') {
+                if (proxy === 'https://jira-kpi-website-prod-git-main-asahotas-projects.vercel.app/api/jira') {
                     // Our custom proxy - send the path and domain separately
                     const jiraDomain = config.jiraBaseUrl.replace('https://', '').replace('http://', '');
                     requestUrl = `${proxy}${baseUrl.replace(config.jiraBaseUrl, '')}?${params}`;
