@@ -42,9 +42,15 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="sprintId">Sprint ID</label>
-                    <input type="number" id="sprintId" placeholder="1230" required>
-                    <small>Sprint ID from your Jira sprint URL</small>
+                    <label for="boardUrl">Board URL (Optional)</label>
+                    <input type="url" id="boardUrl" placeholder="https://company.atlassian.net/jira/software/c/projects/AP/boards/256">
+                    <small>Your Jira board URL - we'll auto-detect the active sprint</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="sprintId">Sprint ID (Optional if Board URL provided)</label>
+                    <input type="number" id="sprintId" placeholder="1230">
+                    <small>Specific sprint ID, or leave blank to use active sprint from board URL</small>
                 </div>
 
                 <button type="submit" id="generateBtn">

@@ -26,8 +26,14 @@ class JiraKPIGenerator {
             jiraEmail: document.getElementById('jiraEmail').value.trim(),
             jiraApiToken: document.getElementById('jiraApiToken').value.trim(),
             storyPointsField: document.getElementById('storyPointsField').value.trim(),
-            sprintId: parseInt(document.getElementById('sprintId').value)
+            boardUrl: document.getElementById('boardUrl').value.trim(),
+            sprintId: document.getElementById('sprintId').value ? parseInt(document.getElementById('sprintId').value) : null
         };
+        
+        // Validate that we have either sprint ID or board URL
+        if (!formData.sprintId && !formData.boardUrl) {
+            throw new Error('Please provide either a Sprint ID or a Board URL to identify which sprint to analyze.');
+        }
         
         this.hideError();
         this.setLoading(true);
@@ -56,6 +62,25 @@ class JiraKPIGenerator {
     }
     
     async fetchSprintIssues(config) {
+        // If no sprint ID provided, try to get active sprint from board URL
+        if (!config.sprintId && config.boardUrl) {
+            try {
+                const boardId = this.extractBoardIdFromUrl(config.boardUrl);
+                if (boardId) {
+                    config.sprintId = await this.getActiveSprintId(config, boardId);
+                    console.log(`Auto-detected sprint ID: ${config.sprintId} from board ${boardId}`);
+                } else {
+                    throw new Error('Could not extract board ID from the provided board URL');
+                }
+            } catch (error) {
+                throw new Error(`Failed to auto-detect sprint: ${error.message}. Please provide a specific Sprint ID instead.`);
+            }
+        }
+        
+        if (!config.sprintId) {
+            throw new Error('No sprint ID available. Please provide either a Sprint ID or a valid Board URL.');
+        }
+        
         const issues = [];
         let startAt = 0;
         const maxResults = 100;
@@ -83,16 +108,31 @@ class JiraKPIGenerator {
                     });
                     
                     const targetUrl = `${baseUrl}?${params}`;
-                    const requestUrl = proxy ? `${proxy}${encodeURIComponent(targetUrl)}` : targetUrl;
-                    
+                    let requestUrl;
                     const headers = {
                         'Accept': 'application/json'
                     };
                     
-                    // Only add auth headers for direct requests or specific proxies
-                    if (!proxy || proxy.includes('cors-anywhere')) {
+                    if (proxy === 'https://jira-kpi-website-dev.vercel.app/api/jira') {
+                        // Our custom proxy - send the path and domain separately
+                        const jiraDomain = config.jiraBaseUrl.replace('https://', '').replace('http://', '');
+                        requestUrl = `${proxy}${baseUrl.replace(config.jiraBaseUrl, '')}?${params}`;
+                        headers['X-Jira-Domain'] = jiraDomain;
                         headers['Authorization'] = `Basic ${auth}`;
                         headers['Content-Type'] = 'application/json';
+                    } else if (!proxy) {
+                        // Direct request
+                        requestUrl = targetUrl;
+                        headers['Authorization'] = `Basic ${auth}`;
+                        headers['Content-Type'] = 'application/json';
+                    } else if (proxy.includes('cors-anywhere')) {
+                        // CORS Anywhere proxy
+                        requestUrl = `${proxy}${targetUrl}`;
+                        headers['Authorization'] = `Basic ${auth}`;
+                        headers['Content-Type'] = 'application/json';
+                    } else {
+                        // Other proxies (like allorigins)
+                        requestUrl = `${proxy}${encodeURIComponent(targetUrl)}`;
                     }
                     
                     const response = await fetch(requestUrl, {
@@ -105,7 +145,7 @@ class JiraKPIGenerator {
                         if (response.status === 401) {
                             throw new Error('Authentication failed. Please check your email and API token.');
                         } else if (response.status === 404) {
-                            throw new Error(`Sprint ${config.sprintId} not found. Please check the sprint ID.`);
+                            throw new Error(`Sprint ${config.sprintId} not found. Please check the sprint ID. Make sure the sprint exists and you have access to it.`);
                         } else if (response.status === 429) {
                             throw new Error('Rate limit exceeded. Please wait a moment and try again.');
                         } else {
@@ -153,8 +193,92 @@ class JiraKPIGenerator {
             }
         }
         
-        // If all proxies failed, throw a comprehensive error
+        // If all proxies failed, check if it's actually a CORS issue or a legitimate API error
+        if (lastError && (lastError.message.includes('not found') || lastError.message.includes('Authentication failed') || lastError.message.includes('Rate limit'))) {
+            // This is a legitimate API error, not a CORS issue
+            throw lastError;
+        }
+        
+        // This is likely a CORS issue
         throw new Error(this.generateCORSErrorMessage(lastError));
+    }
+    
+    extractBoardIdFromUrl(jiraBaseUrl) {
+        // Extract board ID from URLs like: /boards/256
+        const match = jiraBaseUrl.match(/boards\/(\d+)/);
+        return match ? match[1] : null;
+    }
+    
+    async getActiveSprintId(config, boardId) {
+        const corsProxies = [
+            '', // Direct request first
+            'https://jira-kpi-website-dev.vercel.app/api/jira',
+            'https://api.allorigins.win/raw?url=',
+            'https://cors-anywhere.herokuapp.com/'
+        ];
+        
+        const auth = btoa(`${config.jiraEmail}:${config.jiraApiToken}`);
+        
+        for (const proxy of corsProxies) {
+            try {
+                const baseUrl = `${config.jiraBaseUrl}/rest/agile/1.0/board/${boardId}/sprint`;
+                const params = new URLSearchParams({
+                    state: 'active'
+                });
+                
+                const targetUrl = `${baseUrl}?${params}`;
+                let requestUrl;
+                const headers = {
+                    'Accept': 'application/json'
+                };
+                
+                if (proxy === 'https://jira-kpi-website-dev.vercel.app/api/jira') {
+                    // Our custom proxy - send the path and domain separately
+                    const jiraDomain = config.jiraBaseUrl.replace('https://', '').replace('http://', '');
+                    requestUrl = `${proxy}${baseUrl.replace(config.jiraBaseUrl, '')}?${params}`;
+                    headers['X-Jira-Domain'] = jiraDomain;
+                    headers['Authorization'] = `Basic ${auth}`;
+                    headers['Content-Type'] = 'application/json';
+                } else if (!proxy) {
+                    // Direct request
+                    requestUrl = targetUrl;
+                    headers['Authorization'] = `Basic ${auth}`;
+                    headers['Content-Type'] = 'application/json';
+                } else if (proxy.includes('cors-anywhere')) {
+                    // CORS Anywhere proxy
+                    requestUrl = `${proxy}${targetUrl}`;
+                    headers['Authorization'] = `Basic ${auth}`;
+                    headers['Content-Type'] = 'application/json';
+                } else {
+                    // Other proxies (like allorigins)
+                    requestUrl = `${proxy}${encodeURIComponent(targetUrl)}`;
+                }
+                
+                const response = await fetch(requestUrl, {
+                    method: 'GET',
+                    headers: headers
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    let sprintData;
+                    
+                    if (proxy.includes('allorigins') && data.contents) {
+                        sprintData = JSON.parse(data.contents);
+                    } else {
+                        sprintData = data;
+                    }
+                    
+                    if (sprintData.values && sprintData.values.length > 0) {
+                        return sprintData.values[0].id;
+                    }
+                }
+            } catch (error) {
+                continue; // Try next proxy
+            }
+        }
+        
+        throw new Error('Could not find active sprint for board ' + boardId);
     }
     
     generateCORSErrorMessage(originalError) {
