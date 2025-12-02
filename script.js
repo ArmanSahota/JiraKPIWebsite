@@ -65,7 +65,7 @@ class JiraKPIGenerator {
         // CORS proxy options - try multiple strategies
         const corsProxies = [
             '', // Direct request first
-            'https://your-proxy-domain.vercel.app/api/jira', // Your deployed proxy
+            'https://jira-kpi-website-dev.vercel.app/api/jira', // Your deployed proxy
             'https://api.allorigins.win/raw?url=',
             'https://cors-anywhere.herokuapp.com/',
             'https://api.codetabs.com/v1/proxy?quest='
