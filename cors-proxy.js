@@ -48,6 +48,15 @@ app.use('/api/jira/*', createProxyMiddleware({
         
         console.log(`Proxying request to: ${proxyReq.getHeader('host')}${proxyReq.path}`);
     },
+    onProxyRes: (proxyRes, req, res) => {
+        // Add CORS headers to the proxied response
+        proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+        proxyRes.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+        proxyRes.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, X-Jira-Domain';
+        proxyRes.headers['Access-Control-Allow-Credentials'] = 'true';
+        
+        console.log(`Proxy response status: ${proxyRes.statusCode}`);
+    },
     onError: (err, req, res) => {
         console.error('Proxy error:', err);
         res.status(500).json({
