@@ -413,6 +413,50 @@ Original error: ${originalError?.message || 'Network request failed'}
             const prs = [];
             let approvedCount = 0;
             
+            // Debug: Log issue key for tracking
+            const issueKey = issue.key;
+            
+            // PRIORITY: Check customfield_10000 for Bitbucket/GitHub PR integration
+            const prField = issue.fields?.customfield_10000;
+            if (prField) {
+                try {
+                    // Handle both object and string formats
+                    let prData = prField;
+                    if (typeof prField === 'string') {
+                        // Try to parse if it's a JSON string
+                        if (prField.includes('pullrequest') || prField.includes('stateCount')) {
+                            const match = prField.match(/stateCount[=:](\d+)/);
+                            if (match) {
+                                const count = parseInt(match[1]);
+                                approvedCount += count;
+                                prs.push({
+                                    count: count,
+                                    source: 'customfield_10000',
+                                    status: 'integrated'
+                                });
+                                console.log(`Found ${count} PRs in customfield_10000 for ${issueKey}`);
+                            }
+                        }
+                    } else if (typeof prField === 'object') {
+                        // Handle object format
+                        const pullrequest = prData.pullrequest || prData;
+                        if (pullrequest.stateCount) {
+                            const count = parseInt(pullrequest.stateCount);
+                            approvedCount += count;
+                            prs.push({
+                                count: count,
+                                state: pullrequest.state,
+                                source: 'customfield_10000',
+                                status: 'integrated'
+                            });
+                            console.log(`Found ${count} PRs (${pullrequest.state}) in customfield_10000 for ${issueKey}`);
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`Error parsing customfield_10000 for ${issueKey}:`, e);
+                }
+            }
+            
             // Check for PR links in issue links
             const issueLinks = issue.fields?.issuelinks || [];
             issueLinks.forEach(link => {
@@ -426,51 +470,129 @@ Original error: ${originalError?.message || 'Network request failed'}
                         prs.push({
                             number: prNumber,
                             title: summary,
-                            status: 'linked'
+                            status: 'linked',
+                            source: 'issue_link'
                         });
                         approvedCount++;
+                        console.log(`Found PR #${prNumber} in linked issue for ${issueKey}`);
                     }
                 }
             });
             
-            // Check for PR URLs in description or comments
+            // Check for PR URLs in description
             const description = issue.fields?.description || '';
-            const prUrlMatches = description.match(/github\.com\/[^\/]+\/[^\/]+\/pull\/(\d+)/gi) || [];
-            prUrlMatches.forEach(url => {
-                const prNumber = url.match(/\/pull\/(\d+)/)[1];
+            if (description) {
+                // Handle both string and object descriptions (Jira can return different formats)
+                const descText = typeof description === 'string' ? description : JSON.stringify(description);
+                const prUrlMatches = descText.match(/github\.com\/[^\/\s]+\/[^\/\s]+\/pull\/(\d+)/gi) || [];
+                prUrlMatches.forEach(url => {
+                    const prMatch = url.match(/\/pull\/(\d+)/);
+                    if (prMatch) {
+                        const prNumber = prMatch[1];
+                        if (!prs.find(pr => pr.number === prNumber)) {
+                            prs.push({
+                                number: prNumber,
+                                url: url,
+                                status: 'mentioned',
+                                source: 'description'
+                            });
+                            approvedCount++;
+                            console.log(`Found PR #${prNumber} in description for ${issueKey}`);
+                        }
+                    }
+                });
+            }
+            
+            // Check for PR references in summary
+            const summary = issue.fields?.summary || '';
+            const summaryPRMatch = summary.match(/PR\s*#?(\d+)|Pull Request\s*#?(\d+)|\[PR-(\d+)\]/i);
+            if (summaryPRMatch) {
+                const prNumber = summaryPRMatch[1] || summaryPRMatch[2] || summaryPRMatch[3];
                 if (!prs.find(pr => pr.number === prNumber)) {
                     prs.push({
                         number: prNumber,
-                        url: url,
-                        status: 'mentioned'
+                        title: summary,
+                        status: 'in_summary',
+                        source: 'summary'
                     });
                     approvedCount++;
+                    console.log(`Found PR #${prNumber} in summary for ${issueKey}`);
                 }
-            });
+            }
             
             // Check for custom PR field (if your Jira has one)
-            // Common custom field names: customfield_xxxxx
             const customFields = Object.keys(issue.fields || {});
             customFields.forEach(fieldKey => {
                 if (fieldKey.startsWith('customfield_')) {
                     const fieldValue = issue.fields[fieldKey];
-                    if (typeof fieldValue === 'string' && fieldValue.includes('github.com')) {
-                        const prMatch = fieldValue.match(/\/pull\/(\d+)/);
-                        if (prMatch && !prs.find(pr => pr.number === prMatch[1])) {
-                            prs.push({
-                                number: prMatch[1],
-                                url: fieldValue,
-                                status: 'custom_field'
-                            });
-                            approvedCount++;
+                    if (fieldValue) {
+                        const fieldStr = typeof fieldValue === 'string' ? fieldValue : JSON.stringify(fieldValue);
+                        
+                        // Look for GitHub URLs
+                        if (fieldStr.includes('github.com')) {
+                            const prMatch = fieldStr.match(/\/pull\/(\d+)/);
+                            if (prMatch && !prs.find(pr => pr.number === prMatch[1])) {
+                                prs.push({
+                                    number: prMatch[1],
+                                    url: fieldStr,
+                                    status: 'custom_field',
+                                    source: fieldKey
+                                });
+                                approvedCount++;
+                                console.log(`Found PR #${prMatch[1]} in ${fieldKey} for ${issueKey}`);
+                            }
+                        }
+                        
+                        // Look for PR numbers
+                        const prNumMatch = fieldStr.match(/PR\s*#?(\d+)|Pull Request\s*#?(\d+)/i);
+                        if (prNumMatch) {
+                            const prNumber = prNumMatch[1] || prNumMatch[2];
+                            if (!prs.find(pr => pr.number === prNumber)) {
+                                prs.push({
+                                    number: prNumber,
+                                    status: 'custom_field',
+                                    source: fieldKey
+                                });
+                                approvedCount++;
+                                console.log(`Found PR #${prNumber} in ${fieldKey} for ${issueKey}`);
+                            }
                         }
                     }
                 }
             });
             
+            // Check comments for PR references
+            const comments = issue.fields?.comment?.comments || [];
+            comments.forEach((comment, idx) => {
+                const commentBody = comment.body || '';
+                const commentText = typeof commentBody === 'string' ? commentBody : JSON.stringify(commentBody);
+                
+                const prUrlMatches = commentText.match(/github\.com\/[^\/\s]+\/[^\/\s]+\/pull\/(\d+)/gi) || [];
+                prUrlMatches.forEach(url => {
+                    const prMatch = url.match(/\/pull\/(\d+)/);
+                    if (prMatch) {
+                        const prNumber = prMatch[1];
+                        if (!prs.find(pr => pr.number === prNumber)) {
+                            prs.push({
+                                number: prNumber,
+                                url: url,
+                                status: 'in_comment',
+                                source: `comment_${idx}`
+                            });
+                            approvedCount++;
+                            console.log(`Found PR #${prNumber} in comment for ${issueKey}`);
+                        }
+                    }
+                });
+            });
+            
+            if (prs.length > 0) {
+                console.log(`Total PRs found for ${issueKey}:`, prs.length, prs);
+            }
+            
             return prs.length > 0 ? { count: approvedCount, prs } : null;
         } catch (error) {
-            console.warn('Error extracting PR info:', error);
+            console.error('Error extracting PR info:', error, issue.key);
             return null;
         }
     }
