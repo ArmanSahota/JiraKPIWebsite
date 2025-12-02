@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo - Jira Sprint KPI Generator</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .demo-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .demo-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .demo-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .demo-table th,
+        .demo-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .demo-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        .demo-table tr:hover {
+            background: #f8f9fa;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 6px;
+            transition: background 0.3s ease;
+        }
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <a href="index.html" class="back-link">← Back to Generator</a>
+        
+        <header style="text-align: center; margin-bottom: 40px; color: white;">
+            <h1>📊 Demo: Sample KPI Report</h1>
+            <p>This is what your generated sprint report will look like</p>
+        </header>
+
+        <div class="demo-section">
+            <h2>🚀 Sprint Summary</h2>
+            <div class="summary-section">
+                <div class="summary-item">
+                    <span class="summary-label">📋 Tasks Completed</span>
+                    <span class="summary-value">23/28 (82%)</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">⭐ Story Points Completed</span>
+                    <span class="summary-value">45/55 (82%)</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">🚀 Team Velocity</span>
+                    <span class="summary-value">45 points</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">⏱️ Average Cycle Time</span>
+                    <span class="summary-value">3.2 days</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">🐛 Total Bugs</span>
+                    <span class="summary-value">4</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>👥 Individual Performance</h2>
+            <table class="demo-table">
+                <thead>
+                    <tr>
+                        <th>Assignee</th>
+                        <th>Total Issues</th>
+                        <th>Completed</th>
+                        <th>Completion %</th>
+                        <th>Story Points</th>
+                        <th>SP Completed</th>
+                        <th>SP Completion %</th>
+                        <th>Avg Cycle Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Alice Johnson</strong></td>
+                        <td>8</td>
+                        <td>7</td>
+                        <td>88%</td>
+                        <td>16</td>
+                        <td>14</td>
+                        <td>88%</td>
+                        <td>2.8d</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Bob Smith</strong></td>
+                        <td>6</td>
+                        <td>5</td>
+                        <td>83%</td>
+                        <td>12</td>
+                        <td>10</td>
+                        <td>83%</td>
+                        <td>3.1d</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Carol Davis</strong></td>
+                        <td>9</td>
+                        <td>7</td>
+                        <td>78%</td>
+                        <td>18</td>
+                        <td>14</td>
+                        <td>78%</td>
+                        <td>3.8d</td>
+                    </tr>
+                    <tr>
+                        <td><strong>David Wilson</strong></td>
+                        <td>5</td>
+                        <td>4</td>
+                        <td>80%</td>
+                        <td>9</td>
+                        <td>7</td>
+                        <td>78%</td>
+                        <td>2.9d</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="demo-section">
+            <h2>📈 Detailed Metrics (CSV Export)</h2>
+            <p>The downloadable CSV includes additional metrics:</p>
+            <ul style="margin: 20px 0; line-height: 1.8;">
+                <li><strong>Workload Score:</strong> Normalized story points per assignee</li>
+                <li><strong>Bug Ratio:</strong> Percentage of bugs vs total issues</li>
+                <li><strong>Issue Type Breakdown:</strong> Stories, bugs, tasks, etc.</li>
+                <li><strong>Sprint Totals:</strong> Team-wide completion statistics</li>
+                <li><strong>Workload Distribution:</strong> Min/max/average analysis</li>
+                <li><strong>Quality Metrics:</strong> Bug-to-story ratios</li>
+            </ul>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                <h4>Sample CSV Structure:</h4>
+                <pre style="font-size: 12px; overflow-x: auto;">
+Assignee,Total Issues,Completed Issues,Completion % (Issues),Total Story Points,Completed Story Points,Completion % (Story Points),Avg Story Points per Issue,Avg Cycle Time (Days),Bug Ratio (%),Workload Score,Issues: Bug,Issues: Story,Issues: Task
+Alice Johnson,8,7,87.5,16,14,87.5,2.0,2.8,12.5,2.0,1,6,1
+Bob Smith,6,5,83.3,12,10,83.3,2.0,3.1,16.7,2.0,1,4,1
+Carol Davis,9,7,77.8,18,14,77.8,2.0,3.8,11.1,2.0,1,7,1
+David Wilson,5,4,80.0,9,7,77.8,1.8,2.9,20.0,1.8,1,3,1
+
+=== SPRINT SUMMARY ===
+Total Tasks Completed,23/28 (82.1%)
+Total Story Points Completed,45/55 (81.8%)
+Team Velocity (Completed SP),45
+Average Cycle Time,3.2 days
+Average Story Points per Task,2.0
+Bug-to-Story Ratio,20.0%
+                </pre>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🎯 How to Use</h2>
+            <ol style="line-height: 1.8;">
+                <li><strong>Get your Jira API token:</strong> Account Settings → Security → API tokens</li>
+                <li><strong>Find your story points field ID:</strong> Usually customfield_10016 or similar</li>
+                <li><strong>Get the sprint ID:</strong> From your Jira sprint URL</li>
+                <li><strong>Fill out the form</strong> on the main page</li>
+                <li><strong>Generate and download</strong> your comprehensive KPI report</li>
+            </ol>
+            
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="index.html" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                    Try the Generator →
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <footer style="text-align: center; color: white; opacity: 0.8; margin-top: 40px;">
+        <p>🔒 All processing happens in your browser. No data is stored or transmitted.</p>
+    </footer>
+</body>
+</html>

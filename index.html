@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira Sprint KPI Generator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Jira Sprint KPI Generator</h1>
+            <p>Generate comprehensive sprint metrics and KPIs from your Jira data</p>
+            <p><a href="demo.html" style="color: rgba(255,255,255,0.9); text-decoration: underline;">📊 View Sample Report</a></p>
+        </header>
+
+        <div class="form-container">
+            <form id="kpiForm">
+                <div class="form-group">
+                    <label for="jiraBaseUrl">Jira Base URL</label>
+                    <input type="url" id="jiraBaseUrl" placeholder="https://yourcompany.atlassian.net" required>
+                    <small>Your Jira instance URL (e.g., https://company.atlassian.net)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="jiraEmail">Jira Email</label>
+                    <input type="email" id="jiraEmail" placeholder="your-email@company.com" required>
+                    <small>Your Jira account email address</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="jiraApiToken">Jira API Token</label>
+                    <input type="password" id="jiraApiToken" placeholder="Your API token" required>
+                    <small>Generate from: Account Settings → Security → API tokens</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="storyPointsField">Story Points Field ID</label>
+                    <input type="text" id="storyPointsField" placeholder="customfield_10016" required>
+                    <small>Custom field ID for story points (e.g., customfield_10016)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="sprintId">Sprint ID</label>
+                    <input type="number" id="sprintId" placeholder="1230" required>
+                    <small>Sprint ID from your Jira sprint URL</small>
+                </div>
+
+                <button type="submit" id="generateBtn">
+                    <span class="btn-text">Generate KPI Report</span>
+                    <span class="spinner" style="display: none;">⏳</span>
+                </button>
+            </form>
+        </div>
+
+        <div id="results" class="results-container" style="display: none;">
+            <h2>📊 Sprint KPI Results</h2>
+            <div id="summary" class="summary-section"></div>
+            <div class="download-section">
+                <button id="downloadBtn" class="download-btn">
+                    📥 Download CSV Report
+                </button>
+            </div>
+            <div id="preview" class="preview-section"></div>
+        </div>
+
+        <div id="error" class="error-container" style="display: none;">
+            <h3>❌ Error</h3>
+            <p id="errorMessage"></p>
+        </div>
+    </div>
+
+    <footer>
+        <p>🔒 Your credentials are never stored or transmitted to any third party. All processing happens in your browser.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
