@@ -37,31 +37,22 @@ A web-based tool for generating comprehensive sprint metrics and KPIs from your 
 3. Create a new API token
 4. Copy the token for use in the tool
 
-### Story Points Field ID (Auto-Detection Available!)
-The tool can now **automatically detect** your story points field! Just leave the field blank and it will find it for you.
+### Story Points Field ID (Automatic Detection)
+The tool **automatically detects** your story points field - no manual configuration needed!
 
-If you prefer to specify it manually, you can find your Jira instance's custom field ID:
+If you need to find your story points field ID for other purposes, you can use the detection script:
 
-**Method 1: Use the Detection Script (Recommended)**
 ```bash
 python detect_story_points_field.py --sprint-id 1230
 # or
 python detect_story_points_field.py --issue-key PROJ-123
 ```
 
-**Method 2: Manual Detection**
-1. Open any Jira issue in your browser
-2. Add `/rest/api/2/issue/ISSUE-KEY` to the URL
-3. Search the JSON for your story points value
-4. The field ID will be `customfield_XXXXX`
-
-**Method 3: Browser DevTools**
-1. Open a Jira issue with story points
-2. Open DevTools (F12) → Network tab
-3. Refresh the page and look for API calls
-4. Search responses for your story points value
-
-Common field IDs: `customfield_10016`, `customfield_10004`, `customfield_10026`
+The detection algorithm:
+1. Queries Jira field metadata to find fields matching "Story Points", "Story Point Estimate", or "Points"
+2. Excludes false positives (fields with "sprint", "date", "time", etc.)
+3. Falls back to numeric custom fields if name matching fails
+4. Uses common default `customfield_10016` as last resort
 
 ### Sprint ID
 Find the sprint ID from your Jira sprint URL:
@@ -74,9 +65,8 @@ Find the sprint ID from your Jira sprint URL:
 1. **Access the Tool**: Visit the GitHub Pages URL for this repository
 2. **Enter Credentials**: Fill in your Jira base URL, email, and API token
 3. **Enter Sprint ID**: Provide the sprint ID you want to analyze
-4. **Story Points Field** (Optional): Leave blank for auto-detection, or enter manually
-5. **Generate Report**: Click "Generate KPI Report" to fetch and analyze data
-6. **Download CSV**: Use the download button to save the detailed report
+4. **Generate Report**: Click "Generate KPI Report" - story points field is auto-detected
+5. **Download CSV**: Use the download button to save the detailed report
 
 ### Python CLI
 ```bash
@@ -84,9 +74,9 @@ Find the sprint ID from your Jira sprint URL:
 JIRA_BASE_URL=https://yourcompany.atlassian.net
 JIRA_EMAIL=your-email@company.com
 JIRA_API_TOKEN=your_api_token_here
-JIRA_STORY_POINTS_FIELD=customfield_10016  # Optional
+JIRA_STORY_POINTS_FIELD=customfield_10016  # Optional - leave blank to auto-detect
 
-# Run the script
+# Run the script (story points field auto-detects if not in .env)
 python jira_sprint_kpi.py --sprint-id 1230
 ```
 
