@@ -22,11 +22,11 @@ class JiraKPIGenerator {
         e.preventDefault();
         
         const formData = {
-            jiraBaseUrl: document.getElementById('jiraBaseUrl').value.trim(),
-            jiraEmail: document.getElementById('jiraEmail').value.trim(),
-            jiraApiToken: document.getElementById('jiraApiToken').value.trim(),
-            storyPointsField: document.getElementById('storyPointsField').value.trim(),
-            sprintId: document.getElementById('sprintId').value ? parseInt(document.getElementById('sprintId').value) : null
+            jiraBaseUrl: document.getElementById('jiraBaseUrl')?.value.trim() || '',
+            jiraEmail: document.getElementById('jiraEmail')?.value.trim() || '',
+            jiraApiToken: document.getElementById('jiraApiToken')?.value.trim() || '',
+            storyPointsField: document.getElementById('storyPointsField')?.value.trim() || '',
+            sprintId: document.getElementById('sprintId')?.value ? parseInt(document.getElementById('sprintId').value) : null
         };
         
         // Validate that we have sprint ID
