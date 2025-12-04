@@ -26,7 +26,7 @@ class JiraKPIGenerator {
             jiraEmail: document.getElementById('jiraEmail')?.value.trim() || '',
             jiraApiToken: document.getElementById('jiraApiToken')?.value.trim() || '',
             storyPointsField: '', // Always auto-detect
-            sprintId: document.getElementById('sprintId')?.value ? parseInt(document.getElementById('sprintId').value) : null
+            sprintId: document.getElementById('sprintId')?.value ? parseInt(document.getElementById('sprintId')?.value) : null
         };
         
         // Validate that we have sprint ID
