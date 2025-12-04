@@ -70,6 +70,102 @@ def ensure_config():
         sys.exit(1)
 
 
+def detect_story_points_field(sprint_id: int):
+    """
+    Auto-detect the story points field by fetching a sample issue and analyzing fields.
+    Returns the most likely story points field ID.
+    """
+    import re
+    auth = (EMAIL, API_TOKEN)
+    
+    # Fetch first issue from sprint
+    url = f"{JIRA_BASE_URL}/rest/agile/1.0/sprint/{sprint_id}/issue"
+    params = {"startAt": 0, "maxResults": 1}
+    
+    try:
+        resp = requests.get(url, params=params, auth=auth)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        if not data.get("issues"):
+            raise ValueError("No issues found in sprint to detect story points field")
+        
+        issue = data["issues"][0]
+        fields = issue.get("fields", {})
+        
+        # Try to get field metadata to find by name (most reliable method)
+        fields_url = f"{JIRA_BASE_URL}/rest/api/2/field"
+        fields_resp = requests.get(fields_url, auth=auth)
+        
+        if fields_resp.ok:
+            all_fields = fields_resp.json()
+            
+            # Prioritize exact matches for "Story Points" or "Story Point Estimate"
+            exact_patterns = [
+                r"^story points?$",
+                r"^story point estimate$",
+                r"^points?$",
+            ]
+            
+            partial_patterns = ["story points", "story point", "estimate"]
+            exclude_terms = ["sprint", "response", "chart", "date", "time", "ready", "spec"]
+            
+            exact_matches = []
+            partial_matches = []
+            
+            for field in all_fields:
+                field_name = field.get("name", "")
+                field_name_lower = field_name.lower()
+                field_id = field.get("id", "")
+                
+                if not field_id.startswith("customfield_"):
+                    continue
+                
+                # Check for exact matches first
+                for pattern in exact_patterns:
+                    if re.match(pattern, field_name_lower):
+                        exact_matches.append((field_id, field_name))
+                        break
+                else:
+                    # Check partial matches, excluding non-story-point fields
+                    for pattern in partial_patterns:
+                        if pattern in field_name_lower:
+                            if not any(term in field_name_lower for term in exclude_terms):
+                                partial_matches.append((field_id, field_name))
+                            break
+            
+            if exact_matches:
+                detected_field = exact_matches[0][0]
+                print(f"  Auto-detected story points field (exact match): {detected_field} ({exact_matches[0][1]})")
+                return detected_field
+            elif partial_matches:
+                detected_field = partial_matches[0][0]
+                print(f"  Auto-detected story points field (partial match): {detected_field} ({partial_matches[0][1]})")
+                return detected_field
+        
+        # Fallback: Look for numeric custom fields
+        potential_fields = []
+        for field_id, field_value in fields.items():
+            if field_id.startswith("customfield_"):
+                if isinstance(field_value, (int, float)) and field_value > 0:
+                    potential_fields.append((field_id, field_value))
+                    print(f"  Found potential story points field: {field_id} = {field_value}")
+        
+        if potential_fields:
+            detected_field = potential_fields[0][0]
+            print(f"  Auto-detected story points field (numeric value): {detected_field}")
+            return detected_field
+        
+        # Final fallback to common default
+        print("  Could not definitively detect story points field, using common default: customfield_10016")
+        return "customfield_10016"
+        
+    except Exception as e:
+        print(f"  Warning: Failed to auto-detect story points field: {e}")
+        print("  Using common default: customfield_10016")
+        return "customfield_10016"
+
+
 def fetch_issues_for_sprint(sprint_id: int):
     """
     Fetch all issues in the given sprint using Jira Agile API with pagination.
@@ -368,9 +464,37 @@ def parse_args():
 
 
 def main():
-    ensure_config()
+    # Check required config (except STORY_POINTS_FIELD which can be auto-detected)
+    missing = []
+    if not JIRA_BASE_URL:
+        missing.append("JIRA_BASE_URL")
+    if not EMAIL:
+        missing.append("JIRA_EMAIL")
+    if not API_TOKEN:
+        missing.append("JIRA_API_TOKEN")
+    
+    if missing:
+        print("ERROR: Missing required environment variables in .env:")
+        for m in missing:
+            print(f"  - {m}")
+        print("\nExample .env:")
+        print("JIRA_BASE_URL=https://yourcompany.atlassian.net")
+        print("JIRA_EMAIL=your-email@company.com")
+        print("JIRA_API_TOKEN=your_api_token_here")
+        print("JIRA_STORY_POINTS_FIELD=customfield_10016  # Optional - will auto-detect if not provided")
+        sys.exit(1)
+    
     args = parse_args()
     sprint_id = args.sprint_id
+    
+    # Auto-detect story points field if not provided
+    global STORY_POINTS_FIELD
+    if not STORY_POINTS_FIELD:
+        print("Story points field not provided in .env, attempting auto-detection...")
+        STORY_POINTS_FIELD = detect_story_points_field(sprint_id)
+        print(f"Using story points field: {STORY_POINTS_FIELD}\n")
+    else:
+        print(f"Using story points field from .env: {STORY_POINTS_FIELD}\n")
 
     print(f"Fetching issues for sprint {sprint_id}...")
     issues = fetch_issues_for_sprint(sprint_id)

@@ -26,13 +26,12 @@ class JiraKPIGenerator {
             jiraEmail: document.getElementById('jiraEmail').value.trim(),
             jiraApiToken: document.getElementById('jiraApiToken').value.trim(),
             storyPointsField: document.getElementById('storyPointsField').value.trim(),
-            boardUrl: document.getElementById('boardUrl').value.trim(),
             sprintId: document.getElementById('sprintId').value ? parseInt(document.getElementById('sprintId').value) : null
         };
         
-        // Validate that we have either sprint ID or board URL
-        if (!formData.sprintId && !formData.boardUrl) {
-            throw new Error('Please provide either a Sprint ID or a Board URL to identify which sprint to analyze.');
+        // Validate that we have sprint ID
+        if (!formData.sprintId) {
+            throw new Error('Please provide a Sprint ID to analyze.');
         }
         
         this.hideError();
@@ -48,6 +47,13 @@ class JiraKPIGenerator {
     }
     
     async generateKPIReport(config) {
+        // Auto-detect story points field if not provided
+        if (!config.storyPointsField) {
+            console.log('Story points field not provided, attempting auto-detection...');
+            config.storyPointsField = await this.detectStoryPointsField(config);
+            console.log(`Auto-detected story points field: ${config.storyPointsField}`);
+        }
+        
         // Fetch sprint issues
         const issues = await this.fetchSprintIssues(config);
         
@@ -61,24 +67,191 @@ class JiraKPIGenerator {
         this.displayResults(metrics, config.sprintId);
     }
     
-    async fetchSprintIssues(config) {
-        // If no sprint ID provided, try to get active sprint from board URL
-        if (!config.sprintId && config.boardUrl) {
+    async detectStoryPointsField(config) {
+        /**
+         * Auto-detect the story points field by:
+         * 1. Fetching a sample issue from the sprint
+         * 2. Looking for common story points field patterns
+         * 3. Returning the most likely field ID
+         */
+        const auth = btoa(`${config.jiraEmail}:${config.jiraApiToken}`);
+        const sprintId = config.sprintId;
+        
+        if (!sprintId) {
+            throw new Error('Cannot auto-detect story points field without a sprint ID');
+        }
+        
+        // Fetch first issue from sprint to inspect fields
+        const corsProxies = [
+            '', // Direct request first
+            'https://jira-kpi-website-prod.vercel.app/api/jira',
+            'https://api.allorigins.win/raw?url=',
+        ];
+        
+        for (const proxy of corsProxies) {
             try {
-                const boardId = this.extractBoardIdFromUrl(config.boardUrl);
-                if (boardId) {
-                    config.sprintId = await this.getActiveSprintId(config, boardId);
-                    console.log(`Auto-detected sprint ID: ${config.sprintId} from board ${boardId}`);
+                const baseUrl = `${config.jiraBaseUrl}/rest/agile/1.0/sprint/${sprintId}/issue`;
+                const params = new URLSearchParams({
+                    startAt: '0',
+                    maxResults: '1'
+                });
+                
+                const targetUrl = `${baseUrl}?${params}`;
+                let requestUrl;
+                const headers = {
+                    'Accept': 'application/json'
+                };
+                
+                if (proxy === 'https://jira-kpi-website-prod.vercel.app/api/jira') {
+                    const jiraDomain = config.jiraBaseUrl.replace('https://', '').replace('http://', '');
+                    requestUrl = `${proxy}${baseUrl.replace(config.jiraBaseUrl, '')}?${params}`;
+                    headers['X-Jira-Domain'] = jiraDomain;
+                    headers['Authorization'] = `Basic ${auth}`;
+                    headers['Content-Type'] = 'application/json';
+                } else if (!proxy) {
+                    requestUrl = targetUrl;
+                    headers['Authorization'] = `Basic ${auth}`;
+                    headers['Content-Type'] = 'application/json';
                 } else {
-                    throw new Error('Could not extract board ID from the provided board URL');
+                    requestUrl = `${proxy}${encodeURIComponent(targetUrl)}`;
                 }
+                
+                const response = await fetch(requestUrl, {
+                    method: 'GET',
+                    headers: headers,
+                    mode: 'cors'
+                });
+                
+                if (!response.ok) {
+                    continue;
+                }
+                
+                const data = await response.json();
+                let issuesData;
+                
+                if (proxy.includes('allorigins') && data.contents) {
+                    issuesData = JSON.parse(data.contents);
+                } else {
+                    issuesData = data;
+                }
+                
+                if (!issuesData.issues || issuesData.issues.length === 0) {
+                    throw new Error('No issues found in sprint to detect story points field');
+                }
+                
+                const issue = issuesData.issues[0];
+                const fields = issue.fields;
+                
+                // Try fetching field metadata first (most reliable method)
+                const fieldsMetadataUrl = `${config.jiraBaseUrl}/rest/api/2/field`;
+                let metadataRequestUrl;
+                
+                if (proxy === 'https://jira-kpi-website-prod.vercel.app/api/jira') {
+                    const jiraDomain = config.jiraBaseUrl.replace('https://', '').replace('http://', '');
+                    metadataRequestUrl = `${proxy}/rest/api/2/field`;
+                    headers['X-Jira-Domain'] = jiraDomain;
+                } else if (!proxy) {
+                    metadataRequestUrl = fieldsMetadataUrl;
+                } else {
+                    metadataRequestUrl = `${proxy}${encodeURIComponent(fieldsMetadataUrl)}`;
+                }
+                
+                const metadataResponse = await fetch(metadataRequestUrl, {
+                    method: 'GET',
+                    headers: headers,
+                    mode: 'cors'
+                });
+                
+                if (metadataResponse.ok) {
+                    let metadataData = await metadataResponse.json();
+                    
+                    if (proxy.includes('allorigins') && metadataData.contents) {
+                        metadataData = JSON.parse(metadataData.contents);
+                    }
+                    
+                    // Prioritize exact matches for "Story Points" or "Story Point Estimate"
+                    const exactPatterns = [
+                        /^story points?$/i,
+                        /^story point estimate$/i,
+                        /^points?$/i
+                    ];
+                    
+                    const partialPatterns = ['story points', 'story point', 'estimate'];
+                    const excludeTerms = ['sprint', 'response', 'chart', 'date', 'time', 'ready', 'spec'];
+                    
+                    const exactMatches = [];
+                    const partialMatches = [];
+                    
+                    // Search for story points field by name
+                    for (const field of metadataData) {
+                        const fieldName = (field.name || '');
+                        const fieldNameLower = fieldName.toLowerCase();
+                        const fieldId = field.id;
+                        
+                        if (!fieldId.startsWith('customfield_')) continue;
+                        
+                        // Check for exact matches first
+                        let isExact = false;
+                        for (const pattern of exactPatterns) {
+                            if (pattern.test(fieldNameLower)) {
+                                exactMatches.push({ id: fieldId, name: fieldName });
+                                isExact = true;
+                                break;
+                            }
+                        }
+                        
+                        // If not exact, check partial matches
+                        if (!isExact) {
+                            for (const pattern of partialPatterns) {
+                                if (fieldNameLower.includes(pattern)) {
+                                    // Exclude fields that are clearly not story points
+                                    if (!excludeTerms.some(term => fieldNameLower.includes(term))) {
+                                        partialMatches.push({ id: fieldId, name: fieldName });
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (exactMatches.length > 0) {
+                        console.log(`Found story points field by exact name match: ${exactMatches[0].id} (${exactMatches[0].name})`);
+                        return exactMatches[0].id;
+                    } else if (partialMatches.length > 0) {
+                        console.log(`Found story points field by partial name match: ${partialMatches[0].id} (${partialMatches[0].name})`);
+                        return partialMatches[0].id;
+                    }
+                }
+                
+                // Fallback: Look for numeric custom fields
+                for (const [fieldId, fieldValue] of Object.entries(fields)) {
+                    if (!fieldId.startsWith('customfield_')) continue;
+                    
+                    // Check if it's a numeric value (story points are typically numbers)
+                    if (typeof fieldValue === 'number' && fieldValue > 0) {
+                        console.log(`Found potential story points field by numeric value: ${fieldId} = ${fieldValue}`);
+                        return fieldId;
+                    }
+                }
+                
+                // Fallback: return most common default
+                console.warn('Could not definitively detect story points field, using common default: customfield_10016');
+                return 'customfield_10016';
+                
             } catch (error) {
-                throw new Error(`Failed to auto-detect sprint: ${error.message}. Please provide a specific Sprint ID instead.`);
+                console.warn(`Failed to detect story points field with proxy ${proxy}:`, error);
+                continue;
             }
         }
         
+        // If all attempts failed, return common default
+        console.warn('All detection attempts failed, using common default: customfield_10016');
+        return 'customfield_10016';
+    }
+    
+    async fetchSprintIssues(config) {
         if (!config.sprintId) {
-            throw new Error('No sprint ID available. Please provide either a Sprint ID or a valid Board URL.');
+            throw new Error('No sprint ID provided.');
         }
         
         const issues = [];
@@ -201,84 +374,6 @@ class JiraKPIGenerator {
         
         // This is likely a CORS issue
         throw new Error(this.generateCORSErrorMessage(lastError));
-    }
-    
-    extractBoardIdFromUrl(jiraBaseUrl) {
-        // Extract board ID from URLs like: /boards/256
-        const match = jiraBaseUrl.match(/boards\/(\d+)/);
-        return match ? match[1] : null;
-    }
-    
-    async getActiveSprintId(config, boardId) {
-        const corsProxies = [
-            '', // Direct request first
-            'https://jira-kpi-website-dev.vercel.app/api/jira',
-            'https://api.allorigins.win/raw?url=',
-            'https://cors-anywhere.herokuapp.com/'
-        ];
-        
-        const auth = btoa(`${config.jiraEmail}:${config.jiraApiToken}`);
-        
-        for (const proxy of corsProxies) {
-            try {
-                const baseUrl = `${config.jiraBaseUrl}/rest/agile/1.0/board/${boardId}/sprint`;
-                const params = new URLSearchParams({
-                    state: 'active'
-                });
-                
-                const targetUrl = `${baseUrl}?${params}`;
-                let requestUrl;
-                const headers = {
-                    'Accept': 'application/json'
-                };
-                
-                if (proxy === 'https://jira-kpi-website-prod.vercel.app/api/jira') {
-                    // Our custom proxy - send the path and domain separately
-                    const jiraDomain = config.jiraBaseUrl.replace('https://', '').replace('http://', '');
-                    requestUrl = `${proxy}${baseUrl.replace(config.jiraBaseUrl, '')}?${params}`;
-                    headers['X-Jira-Domain'] = jiraDomain;
-                    headers['Authorization'] = `Basic ${auth}`;
-                    headers['Content-Type'] = 'application/json';
-                } else if (!proxy) {
-                    // Direct request
-                    requestUrl = targetUrl;
-                    headers['Authorization'] = `Basic ${auth}`;
-                    headers['Content-Type'] = 'application/json';
-                } else if (proxy.includes('cors-anywhere')) {
-                    // CORS Anywhere proxy
-                    requestUrl = `${proxy}${targetUrl}`;
-                    headers['Authorization'] = `Basic ${auth}`;
-                    headers['Content-Type'] = 'application/json';
-                } else {
-                    // Other proxies (like allorigins)
-                    requestUrl = `${proxy}${encodeURIComponent(targetUrl)}`;
-                }
-                
-                const response = await fetch(requestUrl, {
-                    method: 'GET',
-                    headers: headers
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    let sprintData;
-                    
-                    if (proxy.includes('allorigins') && data.contents) {
-                        sprintData = JSON.parse(data.contents);
-                    } else {
-                        sprintData = data;
-                    }
-                    
-                    if (sprintData.values && sprintData.values.length > 0) {
-                        return sprintData.values[0].id;
-                    }
-                }
-            } catch (error) {
-                continue; // Try next proxy
-            }
-        }
-        
-        throw new Error('Could not find active sprint for board ' + boardId);
     }
     
     generateCORSErrorMessage(originalError) {
